@@ -1,4 +1,3 @@
-import { PricingTable } from "@clerk/nextjs"
 import { auth } from "@clerk/nextjs/server"
 
 export default async function Page() {
@@ -12,8 +11,13 @@ export default async function Page() {
           Bots and their sandboxes are part of the paid plan.
         </p>
       </div>
-      {/* Checkout happens in Clerk's drawer, then lands back in the app */}
-      <PricingTable newSubscriptionRedirectUrl="/" />
+      <div className="rounded-lg border bg-card p-6 text-center">
+        <h2 className="font-medium">Billing is not available yet</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Subscription checkout will appear here once billing is enabled for
+          this Clerk instance.
+        </p>
+      </div>
     </div>
   )
 }
