@@ -47,8 +47,13 @@ type E2BDesktop = E2BSandbox & {
 const sandboxes = new Map<string, Promise<E2BDesktop>>()
 export const MEMORY_FILE = "MEMORY.md"
 
+function requireE2BApiKey() {
+  if (!process.env.E2B_API_KEY) {
+    throw new Error("E2B_API_KEY is required to use bot sandboxes")
+  }
+}
+
 function adapt(raw: E2BDesktop): Sandbox {
-  const desktop = raw as any
   return {
     id: raw.sandboxId,
     process: { executeCommand: async (command, cwd, _env, timeout = 60) => {
@@ -56,7 +61,10 @@ function adapt(raw: E2BDesktop): Sandbox {
       return { exitCode: result.exitCode, result: result.stdout || result.stderr }
     } },
     fs: {
-      downloadFile: async (path) => Buffer.from(await raw.files.read(path) as unknown as string),
+      downloadFile: async (path) => {
+        const content = await raw.files.read(path)
+        return new TextEncoder().encode(content)
+      },
       uploadFile: (file, path) => raw.files.write(path, file),
       listFiles: async (path) => (await raw.files.list(path)).map((file) => ({ name: file.name, isDir: String(file.type) === "directory", size: file.size ?? 0 })),
     },
@@ -77,6 +85,7 @@ function adapt(raw: E2BDesktop): Sandbox {
 }
 
 export async function createBotSandbox(_botId: string) {
+  requireE2BApiKey()
   const sandbox = await E2BSandbox.create({ resolution: [1280, 800] }) as unknown as E2BDesktop
   sandboxes.set(sandbox.sandboxId, Promise.resolve(sandbox))
   await sandbox.commands.run(`touch ${MEMORY_FILE}`)
@@ -84,6 +93,7 @@ export async function createBotSandbox(_botId: string) {
 }
 
 export async function getBotSandbox(sandboxId: string) {
+  requireE2BApiKey()
   let promise = sandboxes.get(sandboxId)
   if (!promise) {
     promise = E2BSandbox.connect(sandboxId) as unknown as Promise<E2BDesktop>
