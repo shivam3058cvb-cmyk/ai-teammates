@@ -17,15 +17,26 @@ export const usageLimits: Record<UsageKind, number> = {
 
 // The billing period the user's paid plan is in, or null without a paid plan
 async function getBillingPeriod(userId: string) {
-  const subscription = await clerk.billing.getUserBillingSubscription(userId)
+  try {
+    const subscription = await clerk.billing.getUserBillingSubscription(userId)
 
-  // The free plan is a subscription item too, but one that never ends
-  const item = subscription.subscriptionItems.find(
-    (item) => item.status === "active" && item.periodEnd
-  )
-  if (!item?.periodEnd) return null
+    // The free plan is a subscription item too, but one that never ends
+    const item = subscription.subscriptionItems.find(
+      (item) => item.status === "active" && item.periodEnd
+    )
+    if (!item?.periodEnd) return null
 
-  return { start: new Date(item.periodStart), end: new Date(item.periodEnd) }
+    return { start: new Date(item.periodStart), end: new Date(item.periodEnd) }
+  } catch (error) {
+    // Billing is optional in Clerk. A project without the billing capability
+    // returns 403; treat that the same as having no paid plan.
+    const status =
+      typeof error === "object" && error !== null && "status" in error
+        ? error.status
+        : undefined
+    if (status === 403) return null
+    throw error
+  }
 }
 
 // What the user has used and has left in their current billing period, or null
