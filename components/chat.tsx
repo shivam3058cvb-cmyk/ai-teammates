@@ -51,8 +51,6 @@ import {
 } from "@/components/ai-elements/tool"
 import { Badge } from "@/components/ui/badge"
 import type { Bot } from "@/db/schema"
-import { USAGE_LIMIT_ERROR } from "@/lib/billing"
-import { usePaywall } from "@/hooks/use-paywall"
 import type { ChatUIMessage } from "@/lib/sandbox-tools"
 import type { chatAgent } from "@/trigger/chat"
 
@@ -232,14 +230,12 @@ function ChatMessages({
   initialMessages: ChatUIMessage[]
   transport: TriggerChatTransport
 }) {
-  const { checkPlan, showUsageLimit } = usePaywall()
   const { messages, sendMessage, status, stop } = useChat<ChatUIMessage>({
     id: chatId,
     messages: initialMessages,
     transport,
     // The agent refuses a turn once the period's allowance is spent
     onError: (error) => {
-      if (error.message === USAGE_LIMIT_ERROR) return showUsageLimit("ai")
 
       // Handled here, so nothing else tells us a reply never arrived
       Sentry.logger.error("Chat reply failed", {
@@ -256,8 +252,6 @@ function ChatMessages({
 
   function handleSubmit(message: PromptInputMessage) {
     if (!message.text.trim()) return
-    // Throwing keeps the draft in the input
-    if (!checkPlan("bots")) throw new Error("Upgrade required")
     // The agent reads this turn's metadata to decide which bot answers
     // and the message keeps it too, to show who it was for
     const metadata = selectedBot && { botId: selectedBot.id }

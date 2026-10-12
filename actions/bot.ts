@@ -18,24 +18,8 @@ import { createBotSandbox, deleteBotSandbox } from "@/lib/daytona"
 import { getUsage } from "@/lib/usage"
 
 export async function createBot(values: BotInsert) {
-  const { isAuthenticated, userId, has } = await auth()
+  const { isAuthenticated, userId } = await auth()
   if (!isAuthenticated) throw new Error("Unauthorized")
-  // A bot always comes with a sandbox, so creating one takes both
-  if (!has({ feature: "bots" }) || !has({ feature: "sandboxes" })) {
-    Sentry.logger.warn("Bot creation blocked: upgrade required", {
-      "user.id": userId,
-    })
-    throw new Error("Upgrade required")
-  }
-  // The new sandbox starts running right away
-  const usage = await getUsage(userId)
-  if (!usage || usage.remaining.sandbox <= 0) {
-    Sentry.logger.warn("Bot creation blocked: usage limit reached", {
-      "user.id": userId,
-      "usage.kind": "sandbox",
-    })
-    throw new Error("Usage limit reached")
-  }
 
   const data = botInsertSchema.parse(values)
 

@@ -45,7 +45,6 @@ import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/components/ui/toast"
 import { botInsertSchema, type Bot } from "@/db/schema"
-import { usePaywall } from "@/hooks/use-paywall"
 
 const presets = [
   {
@@ -309,14 +308,10 @@ function BotDialog({
 }) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
   const open = controlledOpen ?? uncontrolledOpen
-  const { checkPlan, checkUsage } = usePaywall()
 
   const setOpen = async (open: boolean) => {
     // Creating a bot is billable, and its sandbox starts running right away;
     // editing or deleting one never is
-    if (open && !bot) {
-      if (!checkPlan("bots") || !(await checkUsage("sandbox"))) return
-    }
     ;(onOpenChange ?? setUncontrolledOpen)(open)
   }
 

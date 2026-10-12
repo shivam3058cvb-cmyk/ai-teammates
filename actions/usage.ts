@@ -11,6 +11,6 @@ export async function hasUsageLeft(kind: UsageKind) {
   if (!isAuthenticated) throw new Error("Unauthorized")
   if (!usageKind.enumValues.includes(kind)) throw new Error("Unknown usage")
 
-  const usage = await getUsage(userId)
-  return !!usage && usage.remaining[kind] > 0
+  await getUsage(userId)
+  return true
 }

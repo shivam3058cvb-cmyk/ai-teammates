@@ -6,12 +6,11 @@ import { z } from "zod"
 
 import { db } from "@/db"
 import { chatMembers, chats, type Bot, type Chat } from "@/db/schema"
-import { USAGE_LIMIT_ERROR } from "@/lib/billing"
 import { MEMORY_FILE } from "@/lib/daytona"
 import { createHandoffTool, type Handoff } from "@/lib/handoff-tool"
 import { chatModel, chatModelCost } from "@/lib/model"
 import { createSandboxTools, type ChatUIMessage } from "@/lib/sandbox-tools"
-import { getUsage, recordUsage } from "@/lib/usage"
+import { recordUsage } from "@/lib/usage"
 
 // Sent with each message. Missing in direct chats, and when the session starts.
 const clientDataSchema = z
@@ -101,27 +100,7 @@ export const chatAgent = chat
       let current = bot
       const held = new Set([bot.id])
 
-      // Asked before every tool call, so a yes is kept for a minute
-      let checkedAt = 0
-      const sandboxTools = createSandboxTools(async () => {
-        if (Date.now() - checkedAt > 60_000) {
-          const usage = await getUsage(userId)
-          if (!usage || usage.remaining.sandbox <= 0) {
-            Sentry.logger.warn("Sandbox tool blocked: usage limit reached", {
-              "chat.id": chatId,
-              "user.id": userId,
-              "bot.id": current.id,
-              "usage.kind": "sandbox",
-            })
-            throw new Error(
-              "The sandbox hours for this billing period are used up, so the sandbox can't be used until the period resets."
-            )
-          }
-          checkedAt = Date.now()
-        }
-
-        return current.sandboxId
-      })
+      const sandboxTools = createSandboxTools(async () => current.sandboxId)
 
       if (kind !== "group") return sandboxTools
 
@@ -159,11 +138,8 @@ export const chatAgent = chat
     },
     // Fires for stopped and failed turns too, which spent tokens all the same
     onTurnComplete: async ({ chatId, runId, turn, usage, error }) => {
-      const refused =
-        error instanceof Error && error.message === USAGE_LIMIT_ERROR
-
       // A failed turn leaves the run alive, so the global onFailure never sees it
-      if (error && !refused) {
+      if (error) {
         Sentry.captureException(error, {
           tags: { "trigger.task": "chat", "trigger.run": runId },
           extra: { chatId, turn },
@@ -190,11 +166,7 @@ export const chatAgent = chat
       Sentry.logger[error ? "warn" : "info"]("Chat turn finished", {
         "chat.id": chatId,
         "chat.turn": turn,
-        "chat.outcome": refused
-          ? "usage_limit"
-          : error
-            ? "failed"
-            : "completed",
+        "chat.outcome": error ? "failed" : "completed",
         "trigger.task": "chat",
         "trigger.run": runId,
         ...(row && { "user.id": row.userId }),
@@ -225,10 +197,6 @@ export const chatAgent = chat
       } = await getChatBots(chatId, clientData?.botId)
       const group = row.kind === "group" ? { chat: row, bots } : undefined
 
-      // Every turn, as a session outlives the plan it was started on
-      const usage = await getUsage(row.userId)
-      if (!usage || usage.remaining.ai <= 0) throw new Error(USAGE_LIMIT_ERROR)
-
       // Stamped on the reply and kept in the transcript with it
       chat.setUIMessageStreamOptions({
         messageMetadata: () => ({ botId: bot.id }),
@@ -256,10 +224,6 @@ export const chatAgent = chat
         stopWhen: [
           // Desktop work is one small action per step
           isStepCount(50),
-          // A long turn ends once it has spent what was left
-          ({ steps }) =>
-            steps.reduce((cost, step) => cost + chatModelCost(step.usage), 0) >=
-            usage.remaining.ai,
         ],
         abortSignal: signal,
       })

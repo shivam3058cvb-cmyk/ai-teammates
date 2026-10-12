@@ -1,8 +1,5 @@
-import Link from "next/link"
 import { auth } from "@clerk/nextjs/server"
-import { format, formatDistanceToNowStrict } from "date-fns"
 
-import { buttonVariants } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -10,13 +7,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty"
 import { Progress } from "@/components/ui/progress"
 import { getUsage, usageLimits } from "@/lib/usage"
 
@@ -64,39 +54,14 @@ export default async function Page() {
 
   const usage = await getUsage(userId)
 
-  if (!usage) {
-    return (
-      <div className="flex min-h-svh p-6">
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>No usage to show</EmptyTitle>
-            <EmptyDescription>
-              Usage is counted on the paid plan, which is what bots and their
-              sandboxes are part of.
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Link href="/pricing" className={buttonVariants()}>
-              See plans
-            </Link>
-          </EmptyContent>
-        </Empty>
-      </div>
-    )
-  }
-
-  const { period, used } = usage
+  const { used } = usage
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 p-6 py-12">
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold">Usage</h1>
         <p className="text-muted-foreground">
-          Resets in {formatDistanceToNowStrict(period.end)}, on{" "}
-          <time dateTime={period.end.toISOString()}>
-            {format(period.end, "MMMM d")}
-          </time>
-          .
+          Usage is tracked for visibility. All features are unlimited.
         </p>
       </div>
       <div className="flex flex-col gap-4">

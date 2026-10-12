@@ -4,8 +4,8 @@ import { inArray } from "drizzle-orm"
 
 import { db } from "@/db"
 import { bots } from "@/db/schema"
-import { listRunningSandboxIds, stopBotSandbox } from "@/lib/daytona"
-import { getUsage, recordUsage } from "@/lib/usage"
+import { listRunningSandboxIds } from "@/lib/daytona"
+import { recordUsage } from "@/lib/usage"
 
 // How often the sandboxes are looked at, and so what one sighting is billed as
 const INTERVAL_MINUTES = 5
@@ -36,24 +36,7 @@ export const meterSandboxes = schedules.task({
       }))
     )
 
-    let stopped = 0
-    for (const userId of new Set(owned.map((bot) => bot.userId))) {
-      const usage = await getUsage(userId)
-      if (usage && usage.remaining.sandbox > 0) continue
-
-      const sandboxIds = owned
-        .filter((bot) => bot.userId === userId)
-        .map((bot) => bot.sandboxId)
-      await Promise.all(sandboxIds.map((id) => stopBotSandbox(id)))
-
-      stopped += sandboxIds.length
-      Sentry.logger.warn("Sandboxes stopped: usage limit reached", {
-        "user.id": userId,
-        "sandbox.count": sandboxIds.length,
-        // Null without a paid plan, which stops them just the same
-        "billing.paid": !!usage,
-      })
-    }
+    const stopped = 0
 
     Sentry.logger.info("Sandboxes metered", {
       "sandbox.running": running.length,

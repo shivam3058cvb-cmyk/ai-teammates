@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/dialog"
 import { ResizableHandle, ResizablePanel } from "@/components/ui/resizable"
 import { Spinner } from "@/components/ui/spinner"
-import { usePaywall } from "@/hooks/use-paywall"
 
 type DesktopStatus = "idle" | "connecting" | "connected" | "disconnected"
 
@@ -54,7 +53,6 @@ function DesktopPanelProvider({
 }) {
   const [open, setOpen] = React.useState(false)
   const [status, setStatus] = React.useState<DesktopStatus>("idle")
-  const { checkPlan, checkUsage } = usePaywall()
 
   // The VNC client draws into this element. It is never rendered by React, so
   // it can be moved between the panel and the dialog without reconnecting.
@@ -121,13 +119,11 @@ function DesktopPanelProvider({
 
   const toggle = React.useCallback(async () => {
     if (!open) {
-      // Showing the desktop starts the sandbox
-      if (!checkPlan("sandboxes") || !(await checkUsage("sandbox"))) return
       // Connect the first time the panel opens and keep it for later opens
       if (status === "idle") connect()
     }
     setOpen(!open)
-  }, [open, status, connect, checkPlan, checkUsage])
+  }, [open, status, connect])
 
   const attachScreen = React.useCallback(
     (slot: HTMLElement) => {

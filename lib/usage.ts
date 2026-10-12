@@ -1,69 +1,29 @@
-import { createClerkClient } from "@clerk/backend"
-import { and, eq, gte, sql } from "drizzle-orm"
+import { and, eq, sql } from "drizzle-orm"
 
 import { db } from "@/db"
 import { usageEntries, type NewUsageEntry, type UsageKind } from "@/db/schema"
 
-// Not @clerk/nextjs: the Trigger.dev tasks meter usage too, outside Next.js
-const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
-
-// What one billing period of the paid plan includes
+// Usage is retained as telemetry, but it no longer gates any feature.
 export const usageLimits: Record<UsageKind, number> = {
-  // $10 of model spend, in millionths of a dollar
-  ai: 10_000_000,
-  // 50 hours of running sandboxes, in seconds
-  sandbox: 50 * 60 * 60,
+  ai: Number.POSITIVE_INFINITY,
+  sandbox: Number.POSITIVE_INFINITY,
 }
 
-// The billing period the user's paid plan is in, or null without a paid plan
-async function getBillingPeriod(userId: string) {
-  try {
-    const subscription = await clerk.billing.getUserBillingSubscription(userId)
-
-    // The free plan is a subscription item too, but one that never ends
-    const item = subscription.subscriptionItems.find(
-      (item) => item.status === "active" && item.periodEnd
-    )
-    if (!item?.periodEnd) return null
-
-    return { start: new Date(item.periodStart), end: new Date(item.periodEnd) }
-  } catch (error) {
-    // Billing is optional in Clerk. A project without the billing capability
-    // returns 403; treat that the same as having no paid plan.
-    const status =
-      typeof error === "object" && error !== null && "status" in error
-        ? error.status
-        : undefined
-    if (status === 403) return null
-    throw error
-  }
-}
-
-// What the user has used and has left in their current billing period, or null
-// without a paid plan. Takes the user ID so tasks can ask without a session.
 export async function getUsage(userId: string) {
-  const period = await getBillingPeriod(userId)
-  if (!period) return null
-
   const rows = await db
     .select({
       kind: usageEntries.kind,
       amount: sql`sum(${usageEntries.amount})`.mapWith(Number),
     })
     .from(usageEntries)
-    .where(
-      and(
-        eq(usageEntries.userId, userId),
-        gte(usageEntries.createdAt, period.start)
-      )
-    )
+    .where(eq(usageEntries.userId, userId))
     .groupBy(usageEntries.kind)
 
   const used: Record<UsageKind, number> = { ai: 0, sandbox: 0 }
   for (const row of rows) used[row.kind] = row.amount
 
   return {
-    period,
+    period: null,
     used,
     remaining: {
       ai: Math.max(0, usageLimits.ai - used.ai),
