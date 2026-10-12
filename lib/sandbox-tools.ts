@@ -1,4 +1,4 @@
-import type { Sandbox } from "@daytona/sdk"
+import type { Sandbox } from "@/lib/daytona"
 import { tool, type InferUITools, type UIDataTypes, type UIMessage } from "ai"
 import { z } from "zod"
 
@@ -144,7 +144,7 @@ export function createSandboxTools(
       execute: async ({ path }) => {
         const sandbox = await getSandbox()
         const file = await sandbox.fs.downloadFile(path)
-        return { content: truncate(file.toString("utf8")) }
+        return { content: truncate(new TextDecoder().decode(file)) }
       },
     }),
 

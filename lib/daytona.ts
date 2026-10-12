@@ -1,96 +1,123 @@
-import { Daytona, DaytonaNotFoundError, type Sandbox } from "@daytona/sdk"
+import { Sandbox as E2BSandbox } from "@e2b/desktop"
 
-// Reads DAYTONA_API_KEY from the environment. The endpoint is named here because
-// the SDK refuses to take it from an env var that .env.local also defines.
-const daytona = new Daytona({ apiUrl: "https://app.daytona.io/api" })
+// E2B desktop sandboxes are the only external execution boundary used by bots.
+// The adapter keeps the rest of the app independent from a vendor-specific SDK.
+export type Sandbox = {
+  id: string
+  process: {
+    executeCommand: (
+      command: string,
+      cwd?: string,
+      env?: unknown,
+      timeout?: number
+    ) => Promise<{ exitCode: number; result: string }>
+  }
+  fs: {
+    downloadFile: (path: string) => Promise<Uint8Array>
+    uploadFile: (file: Uint8Array, path: string) => Promise<void>
+    listFiles: (path: string) => Promise<
+      { name: string; isDir: boolean; size: number }[]
+    >
+  }
+  computerUse: {
+    getStatus: () => Promise<{ status: "active" | "inactive" }>
+    start: () => Promise<void>
+    screenshot: { takeCompressed: (options: unknown) => Promise<{
+      screenshot?: string
+    }> }
+    display: { getInfo: () => Promise<{ displays?: { width: number; height: number }[] }> }
+    mouse: {
+      click: (x: number, y: number, button: string, double: boolean) => Promise<void>
+      move: (x: number, y: number) => Promise<void>
+      drag: (startX: number, startY: number, endX: number, endY: number) => Promise<void>
+      scroll: (x: number, y: number, direction: string, amount: number) => Promise<void>
+    }
+    keyboard: {
+      type: (text: string) => Promise<void>
+      press: (key: string, modifiers: string[]) => Promise<void>
+    }
+  }
+}
 
-// A bot's notes to itself, in its sandbox's home directory. Chats don't share
-// their transcripts, so this is what a bot carries from one chat to another.
+type E2BDesktop = E2BSandbox & {
+  commands: { run: (command: string, options?: { cwd?: string; timeoutMs?: number }) => Promise<{ exitCode: number; stdout: string; stderr: string }> }
+  files: { read: (path: string) => Promise<Uint8Array>; write: (path: string, data: Uint8Array) => Promise<void>; list: (path: string) => Promise<{ name: string; type?: string; size?: number }[]> }
+}
+
+const sandboxes = new Map<string, Promise<E2BDesktop>>()
 export const MEMORY_FILE = "MEMORY.md"
 
-// Every bot owns one sandbox; the label ties it back to the bot from Daytona's side
-export async function createBotSandbox(botId: string) {
-  const sandbox = await daytona.create({ labels: { botId } })
-
-  try {
-    // Blank until the bot has something worth keeping. A command rather than
-    // an upload: the SDK's uploads can't load their form-data module when
-    // Next.js has bundled it. Commands start in the home directory.
-    const { exitCode, result } = await sandbox.process.executeCommand(
-      `touch ${MEMORY_FILE}`
-    )
-    if (exitCode !== 0)
-      throw new Error(`Creating ${MEMORY_FILE} failed: ${result}`)
-  } catch (error) {
-    // A sandbox nobody got the ID of would never be deleted
-    await daytona.delete(sandbox).catch(() => {})
-    throw error
+function adapt(raw: E2BDesktop): Sandbox {
+  const desktop = raw as any
+  return {
+    id: raw.sandboxId,
+    process: { executeCommand: async (command, cwd, _env, timeout = 60) => {
+      const result = await raw.commands.run(command, { cwd, timeoutMs: timeout * 1000 })
+      return { exitCode: result.exitCode, result: result.stdout || result.stderr }
+    } },
+    fs: {
+      downloadFile: async (path) => Buffer.from(await raw.files.read(path) as unknown as string),
+      uploadFile: (file, path) => raw.files.write(path, file),
+      listFiles: async (path) => (await raw.files.list(path)).map((file) => ({ name: file.name, isDir: String(file.type) === "directory", size: file.size ?? 0 })),
+    },
+    computerUse: {
+      getStatus: async () => ({ status: "active" }),
+      start: async () => { await raw.stream.start() },
+      screenshot: { takeCompressed: async () => ({ screenshot: Buffer.from(await raw.screenshot("bytes")).toString("base64") }) },
+      display: { getInfo: async () => ({ displays: [await raw.getScreenSize()] }) },
+      mouse: {
+        click: (x, y, button, double) => double ? raw.doubleClick(x, y) : button === "right" ? raw.rightClick(x, y) : button === "middle" ? raw.middleClick(x, y) : raw.leftClick(x, y),
+        move: (x, y) => raw.moveMouse(x, y),
+        drag: (startX, startY, endX, endY) => raw.drag([startX, startY], [endX, endY]),
+        scroll: async (_x, _y, direction, amount) => raw.scroll(direction as "up" | "down", amount),
+      },
+      keyboard: { type: (text) => raw.write(text), press: (key, modifiers) => raw.press([...modifiers, key]) },
+    },
   }
-
-  return sandbox.id
 }
 
-// A running sandbox; idle ones stop themselves and are woken here
+export async function createBotSandbox(_botId: string) {
+  const sandbox = await E2BSandbox.create({ resolution: [1280, 800] }) as unknown as E2BDesktop
+  sandboxes.set(sandbox.sandboxId, Promise.resolve(sandbox))
+  await sandbox.commands.run(`touch ${MEMORY_FILE}`)
+  return sandbox.sandboxId
+}
+
 export async function getBotSandbox(sandboxId: string) {
-  const sandbox = await daytona.get(sandboxId)
-  if (sandbox.state !== "started") await sandbox.start()
-  return sandbox
+  let promise = sandboxes.get(sandboxId)
+  if (!promise) {
+    promise = E2BSandbox.connect(sandboxId) as unknown as Promise<E2BDesktop>
+    sandboxes.set(sandboxId, promise)
+  }
+  return adapt(await promise)
 }
 
-// Everything a bot has saved to its memory. Bots older than the file have none
-// until this makes it.
 export async function readBotMemory(sandbox: Sandbox) {
-  const { exitCode, result } = await sandbox.process.executeCommand(
-    `touch ${MEMORY_FILE} && cat ${MEMORY_FILE}`
-  )
-  if (exitCode !== 0)
-    throw new Error(`Reading ${MEMORY_FILE} failed: ${result}`)
+  const { exitCode, result } = await sandbox.process.executeCommand(`touch ${MEMORY_FILE} && cat ${MEMORY_FILE}`)
+  if (exitCode !== 0) throw new Error(`Reading ${MEMORY_FILE} failed: ${result}`)
   return result
 }
 
-// Where the sandbox image serves noVNC and its websocket
-const VNC_PORT = 6080
-
-// A websocket address a browser can open the bot's desktop on. The address
-// carries its own access, good for this port only and for an hour.
 export async function getBotDesktopUrl(sandboxId: string) {
   const sandbox = await getBotSandbox(sandboxId)
-
-  // Starting is slow even when everything is up, so ask first
-  const { status } = await sandbox.computerUse.getStatus()
-  if (status !== "active") await sandbox.computerUse.start()
-
-  const preview = await sandbox.getSignedPreviewUrl(VNC_PORT, 60 * 60)
-  const url = new URL("/websockify", preview.url)
-  url.protocol = "wss:"
-  return url.toString()
+  await sandbox.computerUse.start()
+  const raw = await sandboxes.get(sandboxId)
+  if (!raw) throw new Error("Sandbox not found")
+  await (await raw).stream.start({ requireAuth: true })
+  return (await raw).stream.getUrl({ autoConnect: true })
 }
 
 export async function deleteBotSandbox(sandboxId: string) {
-  try {
-    const sandbox = await daytona.get(sandboxId)
-    await daytona.delete(sandbox)
-  } catch (error) {
-    // Already gone is as good as deleted
-    if (error instanceof DaytonaNotFoundError) return
-    throw error
-  }
+  const raw = await sandboxes.get(sandboxId)
+  if (raw) await (await raw).kill()
+  sandboxes.delete(sandboxId)
 }
 
-// The IDs of every sandbox that is running or on its way in or out of it, which
-// is when Daytona bills for its CPU and memory
 export async function listRunningSandboxIds() {
-  const ids: string[] = []
-  for await (const sandbox of daytona.list({
-    states: ["started", "starting", "stopping"],
-  })) {
-    ids.push(sandbox.id)
-  }
-  return ids
+  return Array.from(sandboxes.keys())
 }
 
-// Its files stay, and it starts again the next time it is used
 export async function stopBotSandbox(sandboxId: string) {
-  const sandbox = await daytona.get(sandboxId)
-  if (sandbox.state === "started") await sandbox.stop()
+  const raw = await sandboxes.get(sandboxId)
+  if (raw) await (await raw).kill()
 }
