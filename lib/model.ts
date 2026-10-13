@@ -1,7 +1,11 @@
-import { neon } from "@neon/ai-sdk-provider"
+import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import type { LanguageModelUsage } from "ai"
 
-type Model = ReturnType<typeof neon>
+const google = createGoogleGenerativeAI({
+  apiKey: process.env.GEMINI_API_KEY,
+})
+
+type Model = ReturnType<typeof google>
 type CallOptions = Parameters<Model["doStream"]>[0]
 
 // AI SDK 7 hands every file in a tool result to this older provider as a
@@ -41,7 +45,7 @@ function withImageToolResults(options: CallOptions): CallOptions {
 
 // The model the chat agent talks to
 export function chatModel(): Model {
-  const model = neon("gpt-5")
+  const model = google(process.env.GEMINI_MODEL ?? "gemini-3.8-flash")
 
   return {
     specificationVersion: model.specificationVersion,
