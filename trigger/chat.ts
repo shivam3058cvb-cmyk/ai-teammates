@@ -8,9 +8,8 @@ import { db } from "@/db"
 import { chatMembers, chats, type Bot, type Chat } from "@/db/schema"
 import { MEMORY_FILE } from "@/lib/daytona"
 import { createHandoffTool, type Handoff } from "@/lib/handoff-tool"
-import { chatModel, chatModelCost } from "@/lib/model"
+import { chatModel } from "@/lib/model"
 import { createSandboxTools, type ChatUIMessage } from "@/lib/sandbox-tools"
-import { recordUsage } from "@/lib/usage"
 
 // Sent with each message. Missing in direct chats, and when the session starts.
 const clientDataSchema = z
@@ -151,17 +150,6 @@ export const chatAgent = chat
         .from(chats)
         .where(eq(chats.id, chatId))
 
-      if (usage && row) {
-        await recordUsage([
-          {
-            userId: row.userId,
-            kind: "ai",
-            amount: chatModelCost(usage),
-            idempotencyKey: `ai:${runId}:${turn}`,
-          },
-        ])
-      }
-
       // One line per turn: who spent what, and how it ended
       Sentry.logger[error ? "warn" : "info"]("Chat turn finished", {
         "chat.id": chatId,
@@ -174,8 +162,7 @@ export const chatAgent = chat
           "gen_ai.usage.input_tokens": usage.inputTokens ?? 0,
           "gen_ai.usage.output_tokens": usage.outputTokens ?? 0,
           // Millionths of a dollar, as in the usage ledger
-          "usage.cost": chatModelCost(usage),
-        }),
+          }),
       })
 
       // The run sleeps between turns, and may be frozen as soon as this returns

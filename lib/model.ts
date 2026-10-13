@@ -1,6 +1,4 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
-import type { LanguageModelUsage } from "ai"
-
 const google = createGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY,
 })
@@ -19,17 +17,4 @@ export function chatModel(): Model {
     doGenerate: (options) => model.doGenerate(options),
     doStream: (options) => model.doStream(options),
   }
-}
-
-// Dollars per million tokens for the model above. The gateway bills the
-// provider's list price; it publishes no cheaper rate for cached input.
-const pricing = { input: 1.25, output: 10 }
-
-// What a call to the chat model cost, in millionths of a dollar
-export function chatModelCost(usage: LanguageModelUsage) {
-  // Dollars per million tokens is millionths of a dollar per token
-  return Math.ceil(
-    (usage.inputTokens ?? 0) * pricing.input +
-      (usage.outputTokens ?? 0) * pricing.output
-  )
 }
