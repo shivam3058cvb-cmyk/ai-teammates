@@ -1,8 +1,6 @@
 "use client"
 
 import { UserButton } from "@clerk/nextjs"
-import { GaugeIcon } from "lucide-react"
-
 // The account button in the sidebar footer, with the usage page in its menu.
 // A client component, as the menu's parts only exist on the client.
 function UserMenu() {
@@ -24,11 +22,6 @@ function UserMenu() {
     >
       <UserButton.MenuItems>
         <UserButton.Action label="manageAccount" />
-        <UserButton.Link
-          label="Usage"
-          labelIcon={<GaugeIcon className="size-4" />}
-          href="/usage"
-        />
         <UserButton.Action label="signOut" />
       </UserButton.MenuItems>
     </UserButton>

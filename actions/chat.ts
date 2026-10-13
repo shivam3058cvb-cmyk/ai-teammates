@@ -19,10 +19,8 @@ import {
   groupChatInsertSchema,
   type GroupChatInsert,
 } from "@/db/schema"
-import type { Feature } from "@/lib/billing"
 import { getBotDesktopUrl } from "@/lib/daytona"
 import type { ChatUIMessage } from "@/lib/sandbox-tools"
-import { getUsage } from "@/lib/usage"
 import { getChat } from "@/queries/chats"
 import type { chatAgent } from "@/trigger/chat"
 
@@ -35,22 +33,9 @@ async function assertChatOwner(chatId: string) {
   if (!chat) throw new Error("Chat not found")
 }
 
-// Billable actions are for plans that include the feature
-async function assertFeature(feature: Feature) {
-  const { has, userId } = await clerkAuth()
-  if (!has({ feature })) {
-    Sentry.logger.warn("Paid feature blocked: upgrade required", {
-      "billing.feature": feature,
-      ...(userId && { "user.id": userId }),
-    })
-    throw new Error("Upgrade required")
-  }
-}
-
 export async function startChatSession(
   params: ChatStartSessionParams<typeof chatAgent>
 ) {
-  await assertFeature("bots")
   await assertChatOwner(params.chatId)
 
   const session = await startSession(params)
@@ -61,8 +46,6 @@ export async function startChatSession(
 }
 
 export async function mintChatAccessToken(chatId: string) {
-  // Sending needs a token, so a session started on a paid plan ends with it
-  await assertFeature("bots")
   await assertChatOwner(chatId)
 
   return auth.createPublicToken({
@@ -81,22 +64,9 @@ export async function loadTranscript(params: { chatId: string }) {
 }
 
 export async function getDesktopUrl(chatId: string) {
-  await assertFeature("sandboxes")
-
   const chat = await getChat(chatId)
   // Only a direct chat has one desktop to show
   if (!chat || chat.kind !== "direct") throw new Error("Chat not found")
-
-  // Showing the desktop starts the sandbox
-  const usage = await getUsage(chat.userId)
-  if (!usage || usage.remaining.sandbox <= 0) {
-    Sentry.logger.warn("Desktop blocked: usage limit reached", {
-      "user.id": chat.userId,
-      "chat.id": chatId,
-      "usage.kind": "sandbox",
-    })
-    throw new Error("Usage limit reached")
-  }
 
   const startedAt = Date.now()
   const url = await getBotDesktopUrl(chat.bots[0].sandboxId)
