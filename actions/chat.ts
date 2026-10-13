@@ -21,7 +21,6 @@ import {
 } from "@/db/schema"
 import { getBotDesktopUrl } from "@/lib/daytona"
 import type { ChatUIMessage } from "@/lib/sandbox-tools"
-import { getUsage } from "@/lib/usage"
 import { getChat } from "@/queries/chats"
 import type { chatAgent } from "@/trigger/chat"
 

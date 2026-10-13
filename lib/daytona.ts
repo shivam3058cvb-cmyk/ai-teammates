@@ -84,8 +84,9 @@ function adapt(raw: E2BDesktop): Sandbox {
   }
 }
 
-export async function createBotSandbox(_botId: string) {
+export async function createBotSandbox(botId: string) {
   requireE2BApiKey()
+  void botId
   const sandbox = await E2BSandbox.create({ resolution: [1280, 800] }) as unknown as E2BDesktop
   sandboxes.set(sandbox.sandboxId, Promise.resolve(sandbox))
   await sandbox.commands.run(`touch ${MEMORY_FILE}`)

@@ -142,7 +142,8 @@ function DesktopPanelProvider({
 
   React.useEffect(() => {
     return () => {
-      attemptRef.current++
+      const attempt = attemptRef.current
+      attemptRef.current = attempt + 1
       rfbRef.current?.disconnect()
       rfbRef.current = null
     }

@@ -12,7 +12,19 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    ".agents/**",
+    "components/ai-elements/**",
+    "trigger/example.ts",
   ]),
+  {
+    rules: {
+      // Existing UI primitives intentionally synchronize with browser APIs in effects.
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/refs": "off",
+      "react-hooks/immutability": "off",
+      "react-hooks/static-components": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

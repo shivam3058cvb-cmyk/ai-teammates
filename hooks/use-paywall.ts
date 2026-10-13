@@ -8,7 +8,10 @@ import type { UsageKind } from "@/db/schema"
 // The server enforces the same things; these only explain them.
 export function usePaywall() {
   const checkPlan = React.useCallback(() => true, [])
-  const checkUsage = React.useCallback(async (_kind: UsageKind) => true, [])
+  const checkUsage = React.useCallback(async (kind: UsageKind) => {
+    void kind
+    return true
+  }, [])
   const showUsageLimit = React.useCallback(() => undefined, [])
 
   return { checkPlan, checkUsage, showUsageLimit }

@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm"
+import { eq, sql } from "drizzle-orm"
 
 import { db } from "@/db"
 import { usageEntries, type NewUsageEntry, type UsageKind } from "@/db/schema"

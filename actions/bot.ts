@@ -15,7 +15,6 @@ import {
   type BotInsert,
 } from "@/db/schema"
 import { createBotSandbox, deleteBotSandbox } from "@/lib/daytona"
-import { getUsage } from "@/lib/usage"
 
 export async function createBot(values: BotInsert) {
   const { isAuthenticated, userId } = await auth()
