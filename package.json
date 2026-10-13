@@ -4,7 +4,9 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "npx trigger.dev@latest dev & next dev",
+    "dev:next": "next dev",
+    "dev:trigger": "npx trigger.dev@latest dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

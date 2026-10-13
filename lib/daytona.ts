@@ -63,7 +63,9 @@ function adapt(raw: E2BDesktop): Sandbox {
     fs: {
       downloadFile: async (path) => {
         const content = await raw.files.read(path)
-        return new TextEncoder().encode(content)
+        return typeof content === "string"
+          ? new TextEncoder().encode(content)
+          : content
       },
       uploadFile: (file, path) => raw.files.write(path, file),
       listFiles: async (path) => (await raw.files.list(path)).map((file) => ({ name: file.name, isDir: String(file.type) === "directory", size: file.size ?? 0 })),
